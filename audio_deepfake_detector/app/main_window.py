@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from PyQt6.QtCore import QThread
+from PyQt6.QtCore import QThread, QTimer
 from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import (
     QFileDialog,
@@ -20,13 +20,17 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from app.widgets.acoustic_analysis_widget import AcousticAnalysisWidget
-from app.widgets.file_info_widget import FileInfoWidget
-from app.widgets.neural_analysis_widget import NeuralAnalysisWidget
-from app.widgets.result_widget import ResultWidget
-from app.widgets.spectrogram_widget import SpectrogramWidget
-from app.widgets.waveform_widget import WaveformWidget
-from app.workers import AnalysisWorker, read_audio_metadata
+from audio_deepfake_detector.app.widgets.acoustic_analysis_widget import (
+    AcousticAnalysisWidget,
+)
+from audio_deepfake_detector.app.widgets.file_info_widget import FileInfoWidget
+from audio_deepfake_detector.app.widgets.neural_analysis_widget import (
+    NeuralAnalysisWidget,
+)
+from audio_deepfake_detector.app.widgets.result_widget import ResultWidget
+from audio_deepfake_detector.app.widgets.spectrogram_widget import SpectrogramWidget
+from audio_deepfake_detector.app.widgets.waveform_widget import WaveformWidget
+from audio_deepfake_detector.app.workers import AnalysisWorker, read_audio_metadata
 
 
 class MainWindow(QMainWindow):
@@ -41,6 +45,7 @@ class MainWindow(QMainWindow):
         self.selected_file: str | None = None
         self.analysis_thread: QThread | None = None
         self.analysis_worker: AnalysisWorker | None = None
+        self._close_when_analysis_stops = False
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -158,7 +163,7 @@ class MainWindow(QMainWindow):
 
         try:
             metadata = read_audio_metadata(file_path)
-        except Exception as exc:
+        except (OSError, ValueError) as exc:
             QMessageBox.warning(self, "Не удалось открыть файл", str(exc))
             return
 
@@ -195,8 +200,10 @@ class MainWindow(QMainWindow):
         self.analysis_worker.stage_changed.connect(self.stage_label.setText)
         self.analysis_worker.finished.connect(self._analysis_finished)
         self.analysis_worker.failed.connect(self._analysis_failed)
+        self.analysis_worker.cancelled.connect(self._analysis_cancelled)
         self.analysis_worker.finished.connect(self.analysis_thread.quit)
         self.analysis_worker.failed.connect(self.analysis_thread.quit)
+        self.analysis_worker.cancelled.connect(self.analysis_thread.quit)
         self.analysis_thread.finished.connect(self.analysis_worker.deleteLater)
         self.analysis_thread.finished.connect(self._thread_finished)
         self.analysis_thread.start()
@@ -210,9 +217,12 @@ class MainWindow(QMainWindow):
         self.acoustic.set_results(result)
         self.neural.set_result(result["cnn"])
         self.result_card.set_result(result["cnn"])
-        self.overview_status.setText(
-            "Статус: акустический анализ завершён; CNN-модель не загружена"
-        )
+        if result["cnn"].get("model_loaded"):
+            self.overview_status.setText("Статус: анализ завершён")
+        else:
+            self.overview_status.setText(
+                "Статус: акустический анализ завершён; CNN-модель не загружена"
+            )
 
         errors = result.get("errors", {})
         if errors:
@@ -229,6 +239,12 @@ class MainWindow(QMainWindow):
         self.overview_status.setText("Статус: анализ завершился ошибкой")
         QMessageBox.critical(self, "Ошибка анализа", message)
 
+    def _analysis_cancelled(self) -> None:
+        """Обновить интерфейс после безопасной кооперативной отмены."""
+        self.progress_bar.setValue(0)
+        self.stage_label.setText("Анализ отменён")
+        self.overview_status.setText("Статус: анализ отменён")
+
     def _thread_finished(self) -> None:
         self._set_busy(False)
         if self.stage_label.text() != "Ошибка анализа":
@@ -238,18 +254,20 @@ class MainWindow(QMainWindow):
         self.analysis_worker = None
         if thread is not None:
             thread.deleteLater()
+        if self._close_when_analysis_stops:
+            self._close_when_analysis_stops = False
+            QTimer.singleShot(0, self.close)
 
     def _set_busy(self, busy: bool) -> None:
         self.select_button.setEnabled(not busy)
         self.analysis_button.setEnabled(not busy and self.selected_file is not None)
 
-    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 — имя Qt API
+    def closeEvent(self, event: QCloseEvent) -> None:
         if self.analysis_thread is not None and self.analysis_thread.isRunning():
-            QMessageBox.information(
-                self,
-                "Анализ выполняется",
-                "Дождитесь завершения текущего этапа анализа перед закрытием приложения.",
-            )
+            self._close_when_analysis_stops = True
+            self.stage_label.setText("Отмена анализа перед закрытием…")
+            if self.analysis_worker is not None:
+                self.analysis_worker.cancel()
             event.ignore()
             return
         event.accept()

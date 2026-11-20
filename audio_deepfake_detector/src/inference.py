@@ -13,6 +13,13 @@ class InferenceResult:
     verdict: str
     confidence: float
 
+    def __post_init__(self) -> None:
+        """Проверить контракт будущего результата модели."""
+        if self.verdict not in {"REAL", "FAKE"}:
+            raise ValueError("verdict должен быть REAL или FAKE")
+        if not 0.0 <= self.confidence <= 1.0:
+            raise ValueError("confidence должен находиться в диапазоне [0, 1]")
+
 
 class ModelNotLoadedError(RuntimeError):
     """Модель ещё не обучена или не загружена."""

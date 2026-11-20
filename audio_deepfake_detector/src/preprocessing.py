@@ -1,13 +1,12 @@
 """Базовая предобработка аудио без извлечения Mel-спектрограмм."""
 
-from pathlib import Path
 from math import gcd
+from pathlib import Path
 
 import librosa
 import numpy as np
 import soundfile as sf
 from scipy.signal import resample_poly
-
 
 TARGET_SAMPLE_RATE = 16_000
 
@@ -32,9 +31,13 @@ def load_audio(
         audio, original_sample_rate = sf.read(
             str(audio_path), dtype="float32", always_2d=True
         )
-    except Exception as soundfile_error:
+    except (OSError, RuntimeError, ValueError) as soundfile_error:
         # Fallback помогает читать MP3/OGG в окружениях, где libsndfile
         # не поддерживает конкретный codec, но его поддерживает librosa.
+        if Path(audio_path).suffix.lower() not in {".mp3", ".ogg"}:
+            raise ValueError(
+                f"Не удалось загрузить аудио: {soundfile_error}"
+            ) from soundfile_error
         try:
             fallback_audio, original_sample_rate = librosa.load(
                 str(audio_path), sr=None, mono=False
@@ -43,7 +46,7 @@ def load_audio(
                 audio = fallback_audio[:, np.newaxis]
             else:
                 audio = fallback_audio.T
-        except Exception as librosa_error:
+        except (OSError, RuntimeError, ValueError) as librosa_error:
             raise ValueError(
                 f"Не удалось загрузить аудио: {soundfile_error}; {librosa_error}"
             ) from librosa_error
@@ -83,7 +86,7 @@ def split_into_windows(
     if window_seconds <= 0:
         raise ValueError("window_seconds должен быть положительным")
 
-    window_size = int(round(sample_rate * window_seconds))
+    window_size = round(sample_rate * window_seconds)
     if window_size < 1:
         raise ValueError("Размер окна получился меньше одного отсчёта")
     if audio.size == 0:

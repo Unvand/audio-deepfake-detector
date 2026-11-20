@@ -29,6 +29,13 @@ pip install -r requirements.txt
 python main.py
 ```
 
+Рекомендуемый запуск из корня клонированного репозитория:
+
+```bash
+pip install -r requirements.txt
+python main.py
+```
+
 Поддерживаемые форматы выбора: WAV, FLAC, MP3 и OGG. Возможность декодирования
 конкретного файла зависит от codec-поддержки установленной библиотеки.
 
@@ -38,6 +45,7 @@ python main.py
 audio_deepfake_detector/
 ├── main.py
 ├── app/
+│   ├── application.py
 │   ├── main_window.py
 │   ├── workers.py
 │   ├── styles.py
@@ -46,6 +54,7 @@ audio_deepfake_detector/
 │   └── 01_dataset_analysis.ipynb
 ├── src/
 │   ├── __init__.py
+│   ├── audio_analysis.py
 │   ├── preprocessing.py
 │   ├── dataset.py
 │   ├── model.py
@@ -62,7 +71,7 @@ audio_deepfake_detector/
 ## Установка в Google Colab
 
 ```python
-!pip install -r audio_deepfake_detector/requirements.txt
+!pip install -r requirements-research.txt
 ```
 
 ## Данные
@@ -70,6 +79,9 @@ audio_deepfake_detector/
 Датасеты, аудиофайлы, локальные протоколы и веса моделей не должны попадать в
 Git. Для запуска notebook требуется отдельно предоставить официальный файл
 протокола ASVspoof 5 или подтверждённую ссылку на него.
+
+Зависимости notebook вынесены в `requirements-research.txt`, чтобы pandas и
+seaborn не увеличивали минимальную desktop-установку.
 
 Собственный тестовый набор с настоящими и RVC/MuXVS-записями предназначен
 только для финального внешнего тестирования и не должен использоваться при

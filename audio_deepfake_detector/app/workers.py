@@ -1,17 +1,26 @@
 """Фоновая загрузка и анализ аудио без блокировки интерфейса."""
 
+from collections.abc import Callable
 from pathlib import Path
+from threading import Event
 from typing import Any
 
-import librosa
 import numpy as np
 import soundfile as sf
 from mutagen import File as MutagenFile
+from mutagen import MutagenError
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
-from src.inference import AudioDeepfakeInference, ModelNotLoadedError
-from src.preprocessing import TARGET_SAMPLE_RATE, load_audio
-
+from audio_deepfake_detector.src.audio_analysis import (
+    calculate_f0,
+    calculate_mfcc,
+    calculate_spectral_features,
+)
+from audio_deepfake_detector.src.inference import (
+    AudioDeepfakeInference,
+    ModelNotLoadedError,
+)
+from audio_deepfake_detector.src.preprocessing import TARGET_SAMPLE_RATE, load_audio
 
 SUPPORTED_EXTENSIONS = {".wav", ".flac", ".mp3", ".ogg"}
 
@@ -46,7 +55,7 @@ def read_audio_metadata(file_path: str | Path) -> dict[str, Any]:
             format=info.format or metadata["format"],
             subtype=info.subtype,
         )
-    except Exception as exc:  # MP3 может зависеть от сборки libsndfile.
+    except (OSError, RuntimeError, ValueError) as exc:
         soundfile_error = exc
 
     try:
@@ -61,9 +70,9 @@ def read_audio_metadata(file_path: str | Path) -> dict[str, Any]:
                 info, "channels", None
             )
             metadata["bitrate"] = getattr(info, "bitrate", None)
-    except Exception:
+    except (MutagenError, OSError, RuntimeError, ValueError) as exc:
         # Bitrate — необязательное поле, его отсутствие не мешает анализу.
-        pass
+        metadata["bitrate_error"] = str(exc)
 
     if metadata["duration"] is None and soundfile_error is not None:
         raise ValueError(f"Не удалось прочитать аудиофайл: {soundfile_error}")
@@ -77,10 +86,23 @@ class AnalysisWorker(QObject):
     stage_changed = pyqtSignal(str)
     finished = pyqtSignal(dict)
     failed = pyqtSignal(str)
+    cancelled = pyqtSignal()
 
     def __init__(self, file_path: str) -> None:
         super().__init__()
         self.file_path = file_path
+        self._cancel_requested = Event()
+
+    def cancel(self) -> None:
+        """Потокобезопасно запросить остановку между этапами анализа."""
+        self._cancel_requested.set()
+
+    def _stop_if_cancelled(self) -> bool:
+        """Сообщить об отмене и вернуть ``True``, если она запрошена."""
+        if not self._cancel_requested.is_set():
+            return False
+        self.cancelled.emit()
+        return True
 
     @pyqtSlot()
     def run(self) -> None:
@@ -90,6 +112,8 @@ class AnalysisWorker(QObject):
             self.stage_changed.emit("Чтение технической информации…")
             result["metadata"] = read_audio_metadata(self.file_path)
             self.progress.emit(10)
+            if self._stop_if_cancelled():
+                return
 
             self.stage_changed.emit("Загрузка и приведение аудио к mono 16 кГц…")
             audio, sample_rate = load_audio(self.file_path, TARGET_SAMPLE_RATE)
@@ -99,90 +123,58 @@ class AnalysisWorker(QObject):
             result["sample_rate"] = sample_rate
             result["duration_processed"] = audio.size / sample_rate
             self.progress.emit(30)
+            if self._stop_if_cancelled():
+                return
 
             self.stage_changed.emit("Расчёт F0 / Pitch…")
-            result["f0"] = self._calculate_f0(audio, sample_rate, result["errors"])
+            result["f0"] = self._safe_feature(
+                "f0", calculate_f0, audio, sample_rate, result["errors"]
+            )
             self.progress.emit(55)
+            if self._stop_if_cancelled():
+                return
 
             self.stage_changed.emit("Расчёт MFCC…")
-            result["mfcc"] = self._calculate_mfcc(audio, sample_rate, result["errors"])
+            result["mfcc"] = self._safe_feature(
+                "mfcc", calculate_mfcc, audio, sample_rate, result["errors"]
+            )
             self.progress.emit(72)
+            if self._stop_if_cancelled():
+                return
 
             self.stage_changed.emit("Расчёт спектральных характеристик…")
-            result["spectral"] = self._calculate_spectral(
-                audio, sample_rate, result["errors"]
+            result["spectral"] = self._safe_feature(
+                "spectral",
+                calculate_spectral_features,
+                audio,
+                sample_rate,
+                result["errors"],
             )
             self.progress.emit(90)
+            if self._stop_if_cancelled():
+                return
 
             self.stage_changed.emit("Проверка CNN-модели…")
             result["cnn"] = self._run_cnn_placeholder(audio, sample_rate)
             self.progress.emit(100)
             self.stage_changed.emit("Анализ завершён")
             self.finished.emit(result)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — граница фонового Qt-worker
             self.failed.emit(str(exc))
 
     @staticmethod
-    def _calculate_f0(
-        audio: np.ndarray, sample_rate: int, errors: dict[str, str]
+    def _safe_feature(
+        name: str,
+        calculation: Callable[[np.ndarray, int], dict[str, Any]],
+        audio: np.ndarray,
+        sample_rate: int,
+        errors: dict[str, str],
     ) -> dict[str, Any] | None:
+        """Выполнить независимый расчёт, сохранив локальную ошибку."""
         try:
-            f0, voiced_flag, _ = librosa.pyin(
-                audio,
-                fmin=float(librosa.note_to_hz("C2")),
-                fmax=float(librosa.note_to_hz("C7")),
-                sr=sample_rate,
-            )
-            times = librosa.times_like(f0, sr=sample_rate)
-            voiced_f0 = f0[np.isfinite(f0)]
-            if voiced_f0.size == 0:
-                raise ValueError("не удалось обнаружить voiced-фрагменты")
-            return {
-                "times": times,
-                "values": f0,
-                "mean": float(np.mean(voiced_f0)),
-                "min": float(np.min(voiced_f0)),
-                "max": float(np.max(voiced_f0)),
-                "std": float(np.std(voiced_f0)),
-                "voiced_ratio": float(np.mean(voiced_flag)),
-            }
-        except Exception as exc:
-            errors["f0"] = str(exc)
-            return None
-
-    @staticmethod
-    def _calculate_mfcc(
-        audio: np.ndarray, sample_rate: int, errors: dict[str, str]
-    ) -> dict[str, Any] | None:
-        try:
-            # 13 коэффициентов используются только для описательной визуализации.
-            values = librosa.feature.mfcc(y=audio, sr=sample_rate, n_mfcc=13)
-            return {
-                "values": values,
-                "mean": np.mean(values, axis=1),
-                "std": np.std(values, axis=1),
-            }
-        except Exception as exc:
-            errors["mfcc"] = str(exc)
-            return None
-
-    @staticmethod
-    def _calculate_spectral(
-        audio: np.ndarray, sample_rate: int, errors: dict[str, str]
-    ) -> dict[str, float] | None:
-        try:
-            centroid = librosa.feature.spectral_centroid(y=audio, sr=sample_rate)
-            bandwidth = librosa.feature.spectral_bandwidth(y=audio, sr=sample_rate)
-            rolloff = librosa.feature.spectral_rolloff(y=audio, sr=sample_rate)
-            zcr = librosa.feature.zero_crossing_rate(audio)
-            return {
-                "spectral_centroid_hz": float(np.mean(centroid)),
-                "spectral_bandwidth_hz": float(np.mean(bandwidth)),
-                "spectral_rolloff_hz": float(np.mean(rolloff)),
-                "zero_crossing_rate": float(np.mean(zcr)),
-            }
-        except Exception as exc:
-            errors["spectral"] = str(exc)
+            return calculation(audio, sample_rate)
+        except Exception as exc:  # noqa: BLE001 — независимая сторонняя функция
+            errors[name] = str(exc)
             return None
 
     @staticmethod

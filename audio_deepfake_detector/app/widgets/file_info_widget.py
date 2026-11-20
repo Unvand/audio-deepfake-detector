@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QFormLayout, QLabel, QWidget
 
 
@@ -40,7 +41,7 @@ class FileInfoWidget(QWidget):
         for key, title in fields:
             label = QLabel("—")
             label.setWordWrap(True)
-            label.setTextInteractionFlags(label.textInteractionFlags())
+            label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             self.value_labels[key] = label
             layout.addRow(f"{title}:", label)
 

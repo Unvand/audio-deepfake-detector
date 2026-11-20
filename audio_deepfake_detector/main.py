@@ -1,20 +1,16 @@
-"""Запуск desktop-приложения: ``python main.py``."""
+"""Совместимая точка запуска из каталога проекта."""
 
 import sys
-
-from PyQt6.QtWidgets import QApplication
-
-from app.main_window import MainWindow
-from app.styles import APP_STYLE
+from pathlib import Path
 
 
 def main() -> int:
-    app = QApplication(sys.argv)
-    app.setApplicationName("Анализ синтезированной речи")
-    app.setStyleSheet(APP_STYLE)
-    window = MainWindow()
-    window.show()
-    return app.exec()
+    """Запустить desktop-приложение."""
+    if __package__ in {None, ""}:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from audio_deepfake_detector.app.application import run_application
+
+    return run_application()
 
 
 if __name__ == "__main__":

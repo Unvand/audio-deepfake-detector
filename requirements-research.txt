@@ -1,0 +1,4 @@
+-r requirements.txt
+pandas>=2,<4
+seaborn>=0.13,<1
+

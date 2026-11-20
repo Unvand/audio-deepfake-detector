@@ -15,6 +15,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from audio_deepfake_detector.app.widgets.plot_utils import show_plot_placeholder
+
 
 class AcousticAnalysisWidget(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -56,7 +58,7 @@ class AcousticAnalysisWidget(QWidget):
         self.f0_axes = self.f0_figure.add_subplot(111)
         layout.addWidget(self.f0_canvas, 1)
         self.tabs.addTab(page, "F0 / Pitch")
-        self._show_plot_message(self.f0_axes, self.f0_canvas, "F0 ещё не рассчитан")
+        show_plot_placeholder(self.f0_axes, self.f0_canvas, "F0 ещё не рассчитан")
 
     def _create_mfcc_page(self) -> None:
         page = QWidget()
@@ -80,7 +82,7 @@ class AcousticAnalysisWidget(QWidget):
         self.mfcc_table.setMaximumHeight(230)
         layout.addWidget(self.mfcc_table, 1)
         self.tabs.addTab(page, "MFCC")
-        self._show_plot_message(
+        show_plot_placeholder(
             self.mfcc_axes, self.mfcc_canvas, "MFCC ещё не рассчитаны"
         )
 
@@ -110,21 +112,6 @@ class AcousticAnalysisWidget(QWidget):
         layout.addStretch()
         self.tabs.addTab(page, "Спектральный анализ")
 
-    @staticmethod
-    def _show_plot_message(axes: Any, canvas: Any, message: str) -> None:
-        axes.clear()
-        axes.text(
-            0.5,
-            0.5,
-            message,
-            ha="center",
-            va="center",
-            color="#64748b",
-            transform=axes.transAxes,
-        )
-        axes.set_axis_off()
-        canvas.draw_idle()
-
     def set_results(self, result: dict[str, Any]) -> None:
         self._set_f0(result.get("f0"), result.get("errors", {}).get("f0"))
         self._set_mfcc(result.get("mfcc"), result.get("errors", {}).get("mfcc"))
@@ -136,7 +123,7 @@ class AcousticAnalysisWidget(QWidget):
         if data is None:
             for label in self.f0_labels.values():
                 label.setText("Недоступно")
-            self._show_plot_message(
+            show_plot_placeholder(
                 self.f0_axes,
                 self.f0_canvas,
                 f"F0 недоступен: {error or 'нет данных'}",
@@ -158,7 +145,7 @@ class AcousticAnalysisWidget(QWidget):
     def _set_mfcc(self, data: dict[str, Any] | None, error: str | None) -> None:
         if data is None:
             self.mfcc_table.setRowCount(0)
-            self._show_plot_message(
+            show_plot_placeholder(
                 self.mfcc_axes,
                 self.mfcc_canvas,
                 f"MFCC недоступны: {error or 'нет данных'}",

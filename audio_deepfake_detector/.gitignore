@@ -1,41 +1,14 @@
-# Python
-__pycache__/
-*.py[cod]
-.pytest_cache/
+# Локальные артефакты notebook
 .ipynb_checkpoints/
-.venv/
-venv/
 
-# Локальные настройки и секреты
-.env
-*.key
-*.token
-
-# Датасеты, протоколы и аудио
-data/
-datasets/
+# Локальные протоколы ASVspoof 5
 ASVspoof5*/
 ASVspoof5*.tsv
 ASVspoof5*.txt
-*.wav
-*.flac
-*.mp3
-*.m4a
-*.ogg
-*.tar
-*.tar.gz
-*.zip
 
-# Веса и контрольные точки моделей
-*.pt
-*.pth
-*.ckpt
-*.onnx
-*.h5
+# Содержимое каталогов генерируется локально; .gitkeep сохраняет структуру.
 models/*
 !models/.gitkeep
-
-# Результаты экспериментов
 results/*
 !results/.gitkeep
 

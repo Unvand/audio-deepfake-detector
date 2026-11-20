@@ -5,6 +5,8 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
+from audio_deepfake_detector.app.widgets.plot_utils import show_plot_placeholder
+
 
 class SpectrogramWidget(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -25,18 +27,11 @@ class SpectrogramWidget(QWidget):
         self.show_placeholder()
 
     def show_placeholder(self) -> None:
-        self.axes.clear()
-        self.axes.text(
-            0.5,
-            0.5,
+        show_plot_placeholder(
+            self.axes,
+            self.canvas,
             "Спектрограмма появится после запуска анализа",
-            ha="center",
-            va="center",
-            color="#64748b",
-            transform=self.axes.transAxes,
         )
-        self.axes.set_axis_off()
-        self.canvas.draw_idle()
 
     def set_audio(self, audio: np.ndarray, sample_rate: int) -> None:
         self.axes.clear()
