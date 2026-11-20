@@ -3,6 +3,7 @@
 from pathlib import Path
 from math import gcd
 
+import librosa
 import numpy as np
 import soundfile as sf
 from scipy.signal import resample_poly
@@ -27,9 +28,25 @@ def load_audio(
     if target_sample_rate <= 0:
         raise ValueError("target_sample_rate должен быть положительным")
 
-    audio, original_sample_rate = sf.read(
-        str(audio_path), dtype="float32", always_2d=True
-    )
+    try:
+        audio, original_sample_rate = sf.read(
+            str(audio_path), dtype="float32", always_2d=True
+        )
+    except Exception as soundfile_error:
+        # Fallback помогает читать MP3/OGG в окружениях, где libsndfile
+        # не поддерживает конкретный codec, но его поддерживает librosa.
+        try:
+            fallback_audio, original_sample_rate = librosa.load(
+                str(audio_path), sr=None, mono=False
+            )
+            if fallback_audio.ndim == 1:
+                audio = fallback_audio[:, np.newaxis]
+            else:
+                audio = fallback_audio.T
+        except Exception as librosa_error:
+            raise ValueError(
+                f"Не удалось загрузить аудио: {soundfile_error}; {librosa_error}"
+            ) from librosa_error
 
     if audio.size == 0:
         raise ValueError(f"Аудиофайл пуст: {audio_path}")
