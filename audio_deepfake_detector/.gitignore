@@ -5,6 +5,7 @@
 ASVspoof5*/
 ASVspoof5*.tsv
 ASVspoof5*.txt
+.dataset_research_cache/
 
 # Содержимое каталогов генерируется локально; .gitkeep сохраняет структуру.
 models/*

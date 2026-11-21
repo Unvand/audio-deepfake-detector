@@ -10,6 +10,9 @@ Mel-спектрограмм на текущем этапе намеренно �
 - подготовлена структура проекта;
 - добавлен Colab notebook для первичного анализа официального протокола
   ASVspoof 5 без скачивания аудиодатасета;
+- добавлены сравнительное исследование современных датасетов и безопасный
+  notebook, который получает небольшие metadata/protocol без автоматической
+  загрузки аудиокорпусов;
 - реализованы загрузка аудио, stereo-to-mono, resampling до 16 кГц и разбиение
   записи на окна заданной длительности;
 - добавлен GUI с waveform, обычной спектрограммой, F0, MFCC и спектральными
@@ -51,7 +54,10 @@ audio_deepfake_detector/
 │   ├── styles.py
 │   └── widgets/
 ├── notebooks/
-│   └── 01_dataset_analysis.ipynb
+│   ├── 01_dataset_analysis.ipynb
+│   └── dataset_research.ipynb
+├── research/
+│   └── dataset_metadata.py
 ├── src/
 │   ├── __init__.py
 │   ├── audio_analysis.py
@@ -77,8 +83,10 @@ audio_deepfake_detector/
 ## Данные
 
 Датасеты, аудиофайлы, локальные протоколы и веса моделей не должны попадать в
-Git. Для запуска notebook требуется отдельно предоставить официальный файл
-протокола ASVspoof 5 или подтверждённую ссылку на него.
+Git. `dataset_research.ipynb` умеет получить официальный небольшой protocol
+ASVspoof 5; перед любой большой загрузкой он показывает объём и требует явное
+подтверждение. Полное сравнение и ссылки находятся в
+[`docs/DATASET_COMPARISON.md`](../docs/DATASET_COMPARISON.md).
 
 Зависимости notebook вынесены в `requirements-research.txt`, чтобы pandas и
 seaborn не увеличивали минимальную desktop-установку.

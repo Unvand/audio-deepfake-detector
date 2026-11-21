@@ -12,6 +12,8 @@ python main.py
 
 - [Архитектура](ARCHITECTURE.md)
 - [Инструкция разработчика](DEVELOPMENT.md)
+- [Сравнение датасетов](docs/DATASET_COMPARISON.md)
+- [Воспроизводимый notebook исследования](audio_deepfake_detector/notebooks/dataset_research.ipynb)
 
 CNN пока не обучена: приложение честно показывает статус
 `МОДЕЛЬ НЕ ЗАГРУЖЕНА` и не генерирует случайные REAL/FAKE-результаты.
