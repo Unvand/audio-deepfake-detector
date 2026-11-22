@@ -1,0 +1,3 @@
+# Полное окружение обоих RuASD notebook без desktop/PyQt-компонентов.
+-r requirements-colab-prepare.txt
+-r requirements-colab-train.txt

@@ -1,0 +1,7 @@
+# GPU-обучение. PyTorch, torchaudio и CUDA предоставляет среда Google Colab.
+numpy>=1.24,<3
+pandas>=2,<4
+soundfile>=0.12,<1
+tqdm>=4.66,<5
+scikit-learn>=1.3,<2
+matplotlib>=3.7,<4

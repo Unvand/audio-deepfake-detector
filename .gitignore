@@ -34,4 +34,10 @@ ASVspoof5*.txt
 *.ckpt
 *.onnx
 *.h5
+prepared_v1/
+training_v1/
+VKR_RuASD/
+processing_progress.csv
+processing_errors.csv
+ruasd_segments_manifest.csv
 
