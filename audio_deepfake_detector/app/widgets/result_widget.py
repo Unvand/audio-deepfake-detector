@@ -15,7 +15,7 @@ class ResultWidget(QFrame):
         title = QLabel("Итоговый результат")
         title.setObjectName("sectionTitle")
         self.status = QLabel("МОДЕЛЬ НЕ ЗАГРУЖЕНА")
-        self.status.setStyleSheet("font-size: 24px; font-weight: 750; color: #64748b;")
+        self.status.setObjectName("resultStatus")
         self.confidence = QLabel("Уверенность: —")
         self.confidence.setObjectName("mutedLabel")
         layout.addWidget(title)
@@ -25,19 +25,19 @@ class ResultWidget(QFrame):
     def set_result(self, cnn_result: dict[str, Any]) -> None:
         if not cnn_result.get("model_loaded"):
             self.status.setText("МОДЕЛЬ НЕ ЗАГРУЖЕНА")
-            self.status.setStyleSheet(
-                "font-size: 24px; font-weight: 750; color: #64748b;"
-            )
+            self._set_verdict_color("")
             self.confidence.setText("Уверенность: —")
             return
 
         verdict = str(cnn_result.get("verdict", "НЕ ВЫПОЛНЕН"))
-        color = "#15803d" if verdict == "REAL" else "#b91c1c"
         self.status.setText(verdict)
-        self.status.setStyleSheet(
-            f"font-size: 28px; font-weight: 800; color: {color};"
-        )
+        self._set_verdict_color(verdict)
         confidence = cnn_result.get("confidence")
         text = f"{float(confidence) * 100:.1f} %" if confidence is not None else "—"
         self.confidence.setText(f"Уверенность: {text}")
+
+    def _set_verdict_color(self, verdict: str) -> None:
+        self.status.setProperty("verdict", verdict)
+        self.status.style().unpolish(self.status)
+        self.status.style().polish(self.status)
 

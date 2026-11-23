@@ -1,11 +1,13 @@
 """Обычная спектрограмма без выбора параметров Mel-преобразования."""
 
 import numpy as np
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
-from audio_deepfake_detector.app.widgets.plot_utils import show_plot_placeholder
+from audio_deepfake_detector.app.widgets.plot_utils import (
+    ThemedCanvas,
+    show_plot_placeholder,
+)
 
 
 class SpectrogramWidget(QWidget):
@@ -21,7 +23,7 @@ class SpectrogramWidget(QWidget):
         layout.addWidget(notice)
 
         self.figure = Figure(figsize=(8, 4), tight_layout=True)
-        self.canvas = FigureCanvasQTAgg(self.figure)
+        self.canvas = ThemedCanvas(self.figure)
         self.axes = self.figure.add_subplot(111)
         layout.addWidget(self.canvas, 1)
         self.show_placeholder()

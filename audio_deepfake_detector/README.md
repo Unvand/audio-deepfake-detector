@@ -18,6 +18,9 @@ pipeline — одна CNN на log-Mel-спектрограммах RuASD. Ре�
   checkpoint после каждой эпохи;
 - добавлен отдельный notebook 03 с проверяемым локальным кэшем `/content` и
   диагностикой времени Drive/FLAC/Mel/GPU/CNN без изменения baseline;
+- notebook 04 проверяет и продолжает упаковку TAR в Colab без ускорителя;
+- кнопка «Тема» переключает светлую и тёмную палитры и сохраняет выбор.
+  Руководство и сведения о версии доступны в меню «Справка»;
 - реализованы загрузка аудио, stereo-to-mono, resampling до 16 кГц и разбиение
   записи на окна заданной длительности;
 - добавлен GUI с waveform, обычной спектрограммой, F0, MFCC и спектральными
@@ -56,6 +59,7 @@ audio_deepfake_detector/
 ├── app/
 │   ├── application.py
 │   ├── main_window.py
+│   ├── help_dialogs.py
 │   ├── workers.py
 │   ├── styles.py
 │   └── widgets/
@@ -64,7 +68,8 @@ audio_deepfake_detector/
 │   ├── dataset_research.ipynb
 │   ├── 01_ruasd_prepare_audio.ipynb
 │   ├── 02_ruasd_train_cnn.ipynb
-│   └── 03_ruasd_train_cnn.ipynb
+│   ├── 03_ruasd_train_cnn.ipynb
+│   └── 04_ruasd_tar_archives_cpu.ipynb
 ├── research/
 │   └── dataset_metadata.py
 ├── src/
@@ -75,6 +80,7 @@ audio_deepfake_detector/
 │   ├── cnn_training.py
 │   ├── training_metrics.py
 │   ├── colab_cache.py
+│   ├── colab_tar_cache.py
 │   ├── training_benchmark.py
 │   ├── dataset.py
 │   ├── model.py

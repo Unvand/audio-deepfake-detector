@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from PyQt6.QtCore import QThread, QTimer
+from PyQt6.QtCore import QSettings, QThread, QTimer
 from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import (
     QFileDialog,
@@ -20,6 +20,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from audio_deepfake_detector.app.help_dialogs import ABOUT, GUIDE, open_help
+from audio_deepfake_detector.app.styles import theme_palette, theme_style
 from audio_deepfake_detector.app.widgets.acoustic_analysis_widget import (
     AcousticAnalysisWidget,
 )
@@ -27,6 +29,7 @@ from audio_deepfake_detector.app.widgets.file_info_widget import FileInfoWidget
 from audio_deepfake_detector.app.widgets.neural_analysis_widget import (
     NeuralAnalysisWidget,
 )
+from audio_deepfake_detector.app.widgets.plot_utils import ThemedCanvas
 from audio_deepfake_detector.app.widgets.result_widget import ResultWidget
 from audio_deepfake_detector.app.widgets.spectrogram_widget import SpectrogramWidget
 from audio_deepfake_detector.app.widgets.waveform_widget import WaveformWidget
@@ -58,6 +61,32 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self._build_tabs()
         root.addWidget(self.tabs, 1)
+        self.settings = QSettings("Unvand", "audio-deepfake-detector")
+        help_menu = self.menuBar().addMenu("Справка")
+        help_menu.addAction("Руководство пользователя").triggered.connect(
+            lambda: open_help(self, "Руководство пользователя", GUIDE)
+        )
+        help_menu.addAction("О программе").triggered.connect(
+            lambda: open_help(self, "О программе", ABOUT)
+        )
+        self._apply_theme(self.settings.value("appearance/theme", "light") == "dark")
+
+    def _apply_theme(self, dark: bool) -> None:
+        self.dark_theme = dark
+        self.setPalette(theme_palette(dark, self.palette()))
+        self.setStyleSheet(theme_style(dark))
+        self.theme_button.setText("Тема · тёмная" if dark else "Тема · светлая")
+        self.theme_button.setToolTip(
+            "Переключить на светлую тему" if dark else "Переключить на тёмную тему"
+        )
+        for canvas in self.findChildren(ThemedCanvas):
+            canvas.dark = dark
+            canvas.draw_idle()
+
+    def _toggle_theme(self) -> None:
+        self._apply_theme(not self.dark_theme)
+        self.settings.setValue("appearance/theme", "dark" if self.dark_theme else "light")
+        self.settings.sync()
 
     def _build_header(self) -> QFrame:
         frame = QFrame()
@@ -90,6 +119,9 @@ class MainWindow(QMainWindow):
         self.analysis_button.setEnabled(False)
         self.analysis_button.clicked.connect(self.start_analysis)
         controls.addWidget(self.analysis_button)
+        self.theme_button = QPushButton()
+        self.theme_button.clicked.connect(self._toggle_theme)
+        controls.addWidget(self.theme_button)
         layout.addLayout(controls)
         return frame
 

@@ -5,8 +5,8 @@ from collections.abc import Sequence
 
 from PyQt6.QtWidgets import QApplication
 
+from audio_deepfake_detector import __version__
 from audio_deepfake_detector.app.main_window import MainWindow
-from audio_deepfake_detector.app.styles import APP_STYLE
 
 
 def create_application(arguments: Sequence[str] | None = None) -> QApplication:
@@ -18,7 +18,7 @@ def create_application(arguments: Sequence[str] | None = None) -> QApplication:
         else QApplication(list(arguments) if arguments is not None else sys.argv)
     )
     app.setApplicationName("Анализ синтезированной речи")
-    app.setStyleSheet(APP_STYLE)
+    app.setApplicationVersion(__version__)
     return app
 
 

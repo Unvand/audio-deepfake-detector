@@ -17,7 +17,7 @@ class NeuralAnalysisWidget(QWidget):
         form = QFormLayout()
         self.model_status = QLabel("Модель не загружена")
         self.verdict = QLabel("НЕ ВЫПОЛНЕН")
-        self.verdict.setStyleSheet("font-size: 22px; font-weight: 700; color: #64748b;")
+        self.verdict.setObjectName("neuralVerdict")
         self.confidence = QLabel("—")
         form.addRow("Состояние:", self.model_status)
         form.addRow("Вердикт:", self.verdict)

@@ -3,7 +3,6 @@
 from typing import Any
 
 import numpy as np
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from PyQt6.QtWidgets import (
     QFormLayout,
@@ -15,7 +14,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from audio_deepfake_detector.app.widgets.plot_utils import show_plot_placeholder
+from audio_deepfake_detector.app.widgets.plot_utils import (
+    ThemedCanvas,
+    show_plot_placeholder,
+)
 
 
 class AcousticAnalysisWidget(QWidget):
@@ -54,7 +56,7 @@ class AcousticAnalysisWidget(QWidget):
         layout.addLayout(form)
 
         self.f0_figure = Figure(figsize=(8, 3), tight_layout=True)
-        self.f0_canvas = FigureCanvasQTAgg(self.f0_figure)
+        self.f0_canvas = ThemedCanvas(self.f0_figure)
         self.f0_axes = self.f0_figure.add_subplot(111)
         layout.addWidget(self.f0_canvas, 1)
         self.tabs.addTab(page, "F0 / Pitch")
@@ -72,7 +74,7 @@ class AcousticAnalysisWidget(QWidget):
         layout.addWidget(note)
 
         self.mfcc_figure = Figure(figsize=(8, 3), tight_layout=True)
-        self.mfcc_canvas = FigureCanvasQTAgg(self.mfcc_figure)
+        self.mfcc_canvas = ThemedCanvas(self.mfcc_figure)
         self.mfcc_axes = self.mfcc_figure.add_subplot(111)
         layout.addWidget(self.mfcc_canvas, 2)
 

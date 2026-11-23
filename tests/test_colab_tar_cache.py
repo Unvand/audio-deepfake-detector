@@ -1,5 +1,6 @@
 """Проверка TAR-кэша на синтетических FLAC."""
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -104,3 +105,66 @@ def test_test_unseen_archives_require_a_separate_request(roots) -> None:
     restore_tar_cache(source, archives, cache, ("test_unseen",), reserve_bytes=0)
     assert len(list((cache / "test_unseen").glob("*.flac"))) == 2
     assert not (cache / "train").exists()
+
+
+def test_cpu_audit_finds_partial_and_bad_receipt(roots) -> None:
+    source, archives, staging, _ = roots
+    build_tar_archives(source, archives, staging, reserve_bytes=0)
+    train = next(archives.glob("*/train/*.tar"))
+    validation = next(archives.glob("*/validation/*.tar"))
+    validation.rename(validation.with_suffix(".tar.part"))
+    train.with_suffix(".json").write_text("{}", encoding="utf-8")
+    report = build_tar_archives(
+        source, archives, staging, reserve_bytes=0,
+        plan_only=True, verify_sha=True, verify_contents=True,
+    )
+    assert report["planned_archives"] == 2
+    assert report["verified_archives"] == 0
+    assert report["partial_bytes_on_drive"] > 0
+    assert report["errors"] == 1
+    assert [row["status"] for row in report["archives"]] == ["Повреждён", "Незавершён"]
+    build_tar_archives(source, archives, staging, reserve_bytes=0, verify_contents=True)
+    report = build_tar_archives(
+        source, archives, staging, reserve_bytes=0,
+        plan_only=True, verify_sha=True, verify_contents=True,
+    )
+    assert report["verified_archives"] == 2
+    assert report["pending_archives"] == 0
+
+
+def test_cpu_notebook_writes_verified_report_only_after_opt_in(roots) -> None:
+    source, archives, staging, cache = roots
+    notebook = (
+        Path(__file__).resolve().parents[1]
+        / "audio_deepfake_detector/notebooks/04_ruasd_tar_archives_cpu.ipynb"
+    )
+    notebook_data = json.loads(notebook.read_text(encoding="utf-8"))
+    assert "accelerator" not in notebook_data["metadata"]
+    code = {
+        cell["id"]: "".join(cell["source"])
+        for cell in notebook_data["cells"] if cell["cell_type"] == "code"
+    }
+    for identifier, cell in code.items():
+        compile(cell, identifier, "exec")
+        assert "torch" not in cell and "train_cnn" not in cell
+    report_path = source.parent / "tar_archives_report.json"
+
+    def inspect(**checks):
+        return build_tar_archives(
+            source, archives, staging, reserve_bytes=0, plan_only=True, **checks,
+        )
+
+    namespace = {
+        "source_root": source, "archive_root": archives, "staging_root": staging,
+        "options": lambda: {"splits": ("train", "validation"), "reserve_bytes": 0},
+        "build_tar_archives": build_tar_archives, "inspect_archives": inspect,
+        "report_path": report_path, "json": json, "show_report": lambda report: None,
+    }
+    exec(code["build"], namespace)  # noqa: S102
+    assert not report_path.exists()
+    assert not archives.exists()
+    exec(code["build"].replace("RUN_TAR_BUILD = False", "RUN_TAR_BUILD = True"), namespace)  # noqa: S102
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["complete"]
+    assert report["verified_archives"] == 2
+    assert restore_tar_cache(source, archives, cache, reserve_bytes=0)["restored_files"] == 4

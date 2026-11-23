@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import re
 import shutil
 import tarfile
 import tempfile
@@ -125,11 +126,46 @@ def _receipt(archive, receipt_path, shard):
     except json.JSONDecodeError:
         return None
     if (
-        archive.stat().st_size != shard["bytes"]
+        not isinstance(receipt, dict)
+        or not isinstance(receipt.get("members"), dict)
+        or archive.stat().st_size != shard["bytes"]
         or set(receipt["members"]) != set(shard["members"])
+        or any(
+            not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest)
+            for digest in [receipt.get("sha256"), *receipt["members"].values()]
+        )
     ):
         return None
     return receipt
+
+
+def _inspect_part(archive, receipt_path, shard, verify_sha, verify_contents):
+    partial = archive.with_suffix(".tar.part")
+    row = {
+        "archive": archive.name, "split": archive.parent.name,
+        "planned_bytes": shard["bytes"], "flac_count": len(shard["members"]),
+        "size_bytes": None, "sha256": None, "partial_bytes": 0,
+        "status": "Отсутствует", "error": None,
+    }
+    try:
+        if partial.is_file():
+            row["partial_bytes"] = partial.stat().st_size
+        if not archive.is_file():
+            row["status"] = "Незавершён" if partial.is_file() else "Отсутствует"
+            return row
+        row["size_bytes"] = archive.stat().st_size
+        receipt = _receipt(archive, receipt_path, shard)
+        if receipt is None:
+            raise ValueError("Размер или JSON с контрольными суммами не совпадает с планом")
+        row["sha256"] = receipt["sha256"]
+        if verify_sha and _sha256(archive) != receipt["sha256"]:
+            raise ValueError("SHA-256 архива не совпадает")
+        if verify_contents:
+            _unpack(archive, shard["members"], receipt["members"], {})
+        row["status"] = "Готов" if verify_sha else "SHA-256 не проверена"
+    except (OSError, ValueError, tarfile.TarError) as error:
+        row.update(status="Повреждён", error=str(error))
+    return row
 
 
 def _build_inputs(source, archive_root, splits, max_bytes):
@@ -146,7 +182,7 @@ def _build_inputs(source, archive_root, splits, max_bytes):
 def build_tar_archives(
     source_root, archive_root, staging_root, splits=("train", "validation"), *,
     max_bytes=DEFAULT_SHARD_BYTES, archive_free_bytes=None, reserve_bytes=GIB,
-    plan_only=False,
+    plan_only=False, verify_sha=False, verify_contents=False,
 ):
     """Оценить место или упаковать split с журналом завершённых частей на Drive."""
     source, destination, staging = (
@@ -157,20 +193,30 @@ def build_tar_archives(
         raise ValueError("Некорректный размер TAR или резерв")
     plans = list(_build_inputs(source, destination, splits, max_bytes))
     pending = []
+    rows = []
     for directory, shards in plans:
-        for number, shard in enumerate(shards):
+        parts = tqdm(shards, desc=f"Проверка {directory.name}", unit="TAR")
+        for number, shard in enumerate(parts):
             archive, receipt_path = _archive_paths(directory, number)
-            receipt = _receipt(archive, receipt_path, shard)
-            if receipt is None or (not plan_only and _sha256(archive) != receipt["sha256"]):
+            row = _inspect_part(
+                archive, receipt_path, shard, verify_sha or not plan_only, verify_contents,
+            )
+            rows.append(row)
+            if row["status"] not in {"Готов", "SHA-256 не проверена"}:
                 pending.append((archive, receipt_path, shard))
     needed = sum(shard["bytes"] for _, _, shard in pending)
     peak = max((shard["bytes"] for _, _, shard in pending), default=0)
-    free = _directory_space(destination)
-    if archive_free_bytes is not None:
-        free = min(free, archive_free_bytes)
+    free = _directory_space(destination) if archive_free_bytes is None else archive_free_bytes
     local_free = _directory_space(staging)
     report = {
         "pending_archives": len(pending),
+        "planned_archives": len(rows),
+        "ready_archives": len(rows) - len(pending),
+        "verified_archives": sum(row["status"] == "Готов" for row in rows),
+        "planned_bytes": sum(row["planned_bytes"] for row in rows),
+        "partial_bytes_on_drive": sum(row["partial_bytes"] for row in rows),
+        "errors": sum(row["error"] is not None for row in rows),
+        "archives": rows,
         "additional_drive_bytes": needed,
         "drive_free_bytes": free,
         "peak_local_tar_bytes": peak,
@@ -182,6 +228,10 @@ def build_tar_archives(
     }
     if plan_only:
         return report
+    tqdm.write(
+        f"TAR запланировано {len(rows)}, готово {report['ready_archives']}, "
+        f"осталось {len(pending)}, ошибок проверки {report['errors']}"
+    )
     if not report["enough_space"]:
         raise OSError(f"Недостаточно места для полного плана TAR: {report}")
     if not pending:
@@ -194,7 +244,10 @@ def build_tar_archives(
             local = Path(work) / archive.name
             hashes = {}
             with tarfile.open(local, "w", format=tarfile.PAX_FORMAT) as packed:
-                for name, size in tqdm(shard["members"].items(), desc=archive.name, leave=False):
+                for name, size in tqdm(
+                    shard["members"].items(), desc=f"{archive.parent.name}/{archive.name}",
+                    unit="FLAC", leave=False,
+                ):
                     path = _file(source, name)
                     payload = path.read_bytes()
                     if len(payload) != size:
@@ -228,7 +281,10 @@ def _unpack(archive, sizes, hashes, destinations):
             member = packed.next()
             if member is None or not member.isfile() or (member.name, member.size) != (name, size):
                 raise ValueError(f"Неожиданный элемент TAR, ожидался {name}")
-            with packed.extractfile(member) as stream:
+            stream = packed.extractfile(member)
+            if stream is None:
+                raise ValueError(f"Не удалось прочитать файл внутри TAR: {name}")
+            with stream:
                 payload = stream.read()
             if hashlib.sha256(payload).hexdigest() != hashes[name]:
                 raise ValueError(f"Повреждён файл внутри TAR: {name}")
