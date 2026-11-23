@@ -256,7 +256,7 @@ def check_local_cache(
     if ready:
         message = f"Кэш готов: {valid}/{len(rows)} файлов, split={selected_splits}"
     elif not cache.exists():
-        message = "Локальный кэш отсутствует; нажмите «Подготовить локальный кэш»."
+        message = "Локальный кэш отсутствует. Запустите ячейку подготовки кэша."
     else:
         message = (
             f"Кэш не готов: valid={valid}, missing={missing}, corrupted={corrupted}, "
