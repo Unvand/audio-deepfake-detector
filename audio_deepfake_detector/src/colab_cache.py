@@ -196,6 +196,7 @@ def check_local_cache(
     *,
     verify_decode: bool = True,
     verify_checksums: bool = False,
+    compare_source_sizes: bool = True,
 ) -> CacheStatus:
     """Проверить manifest и только выбранные split частичного кэша."""
     source = Path(source_root)
@@ -219,12 +220,13 @@ def check_local_cache(
     for row in rows.itertuples(index=False):
         relative = str(row.audio_path)
         destination = cache / relative
-        source_path = source / relative
-        if not source_path.is_file():
-            corrupted += 1
-            continue
-        source_size = source_path.stat().st_size
-        expected_bytes += source_size
+        if compare_source_sizes:
+            source_path = source / relative
+            if not source_path.is_file():
+                corrupted += 1
+                continue
+            source_size = source_path.stat().st_size
+            expected_bytes += source_size
         if relative not in index.index:
             if destination.exists():
                 corrupted += 1
@@ -232,9 +234,11 @@ def check_local_cache(
                 missing += 1
             continue
         expected_size = int(index.at[relative, "source_size"])
-        if expected_size != source_size:
+        if compare_source_sizes and expected_size != source_size:
             corrupted += 1
             continue
+        if not compare_source_sizes:
+            expected_bytes += expected_size
         if not destination.exists():
             missing += 1
             continue
@@ -422,9 +426,15 @@ def require_ready_cache(
     source_root: str | Path,
     cache_root: str | Path,
     splits: Iterable[str] = ("train", "validation"),
+    *,
+    compare_source_sizes: bool = True,
 ) -> Path:
     """Вернуть корень кэша либо запретить незаметный fallback на Google Drive."""
-    status = check_local_cache(source_root, cache_root, splits)
+    status = check_local_cache(
+        source_root, cache_root, splits,
+        compare_source_sizes=compare_source_sizes,
+        verify_checksums=not compare_source_sizes,
+    )
     if not status.ready:
         raise RuntimeError(status.message + " Подготовьте/исправьте кэш перед обучением.")
     return Path(cache_root)

@@ -36,7 +36,13 @@ def _execute(cell: str, namespace: dict) -> None:
 
 @pytest.mark.parametrize(
     ("flag", "operation"),
-    [("RUN_TRAINING", "train_cnn"), ("RUN_CACHE_PREPARATION", "prepare_local_cache")],
+    [
+        ("RUN_TRAINING", "train_cnn"),
+        ("RUN_CACHE_PREPARATION", "prepare_local_cache"),
+        ("RUN_CACHE_PREPARATION", "restore_tar_cache"),
+        ("RUN_TAR_BUILD", "build_tar_archives"),
+        ("RUN_TAR_TRANSFER_BENCHMARK", "benchmark_tar_transfer"),
+    ],
 )
 def test_operation_runs_only_in_its_opt_in_cell(flag: str, operation: str) -> None:
     launch = _launch_cell(flag)
@@ -96,6 +102,7 @@ def test_cache_cell_uses_selected_splits_and_updates_status() -> None:
     verified = {"train", "test_unseen"}
     namespace = {
         "selected_cache_splits": lambda: selected,
+        "cache_mode": SimpleNamespace(value="files"),
         "CACHE_VERIFIED_SPLITS": verified,
         "update_copy_progress": progress,
         "prepare_local_cache": prepare,
