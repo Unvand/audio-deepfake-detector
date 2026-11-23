@@ -16,6 +16,8 @@ pipeline — одна CNN на log-Mel-спектрограммах RuASD. Ре�
 - добавлены два независимых RuASD notebook: CPU-подготовка FLAC с возобновлением
   и управляемое через `ipywidgets` GPU-обучение одной CNN с TensorBoard и
   checkpoint после каждой эпохи;
+- добавлен отдельный notebook 03 с проверяемым локальным кэшем `/content` и
+  диагностикой времени Drive/FLAC/Mel/GPU/CNN без изменения baseline;
 - реализованы загрузка аудио, stereo-to-mono, resampling до 16 кГц и разбиение
   записи на окна заданной длительности;
 - добавлен GUI с waveform, обычной спектрограммой, F0, MFCC и спектральными
@@ -61,7 +63,8 @@ audio_deepfake_detector/
 │   ├── 01_dataset_analysis.ipynb
 │   ├── dataset_research.ipynb
 │   ├── 01_ruasd_prepare_audio.ipynb
-│   └── 02_ruasd_train_cnn.ipynb
+│   ├── 02_ruasd_train_cnn.ipynb
+│   └── 03_ruasd_train_cnn.ipynb
 ├── research/
 │   └── dataset_metadata.py
 ├── src/
@@ -71,6 +74,8 @@ audio_deepfake_detector/
 │   ├── ruasd_preparation.py
 │   ├── cnn_training.py
 │   ├── training_metrics.py
+│   ├── colab_cache.py
+│   ├── training_benchmark.py
 │   ├── dataset.py
 │   ├── model.py
 │   ├── train.py

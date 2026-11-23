@@ -164,9 +164,9 @@ def test_checkpoint_compatibility_and_run_directory(tmp_path: Path) -> None:
 
 
 def test_training_checkpoint_resume_tensorboard_and_real_images(tmp_path: Path) -> None:
-    prepared = tmp_path / "prepared"
+    prepared = tmp_path / "content" / "ruasd_prepared_cache"
     manifest = _prepared_dataset(prepared)
-    run_dir = tmp_path / "runs" / "tiny"
+    run_dir = tmp_path / "google_drive" / "training_v1" / "runs" / "tiny"
     mel = MelConfig(n_fft=512, win_length=512, hop_length=320, n_mels=32)
     first_config = TrainingConfig(
         batch_size=8,
@@ -188,6 +188,7 @@ def test_training_checkpoint_resume_tensorboard_and_real_images(tmp_path: Path) 
     assert (run_dir / "training_history.csv").exists()
     assert (run_dir / "experiment_config.json").exists()
     assert (run_dir / "best_epoch.json").exists()
+    assert not (prepared / "last_checkpoint.pth").exists()
 
     _, resumed_history = train_cnn(
         prepared, run_dir, mel, replace(first_config, epochs=2), resume=True

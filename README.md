@@ -15,6 +15,7 @@ python main.py
 - [Сравнение датасетов](docs/DATASET_COMPARISON.md)
 - [Воспроизводимый notebook исследования](audio_deepfake_detector/notebooks/dataset_research.ipynb)
 - [Подготовка RuASD и обучение CNN в Colab](docs/RUASD_COLAB.md)
+- [Обучение RuASD из локального кэша Colab](audio_deepfake_detector/notebooks/03_ruasd_train_cnn.ipynb)
 
 CNN пока не обучена: приложение честно показывает статус
 `МОДЕЛЬ НЕ ЗАГРУЖЕНА` и не генерирует случайные REAL/FAKE-результаты.

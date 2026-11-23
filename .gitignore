@@ -40,4 +40,5 @@ VKR_RuASD/
 processing_progress.csv
 processing_errors.csv
 ruasd_segments_manifest.csv
+ruasd_prepared_cache/
 
