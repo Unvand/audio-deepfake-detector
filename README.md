@@ -17,6 +17,7 @@ python main.py
 - [Подготовка RuASD и обучение CNN в Colab](docs/RUASD_COLAB.md)
 - [Обучение RuASD из локального кэша Colab](audio_deepfake_detector/notebooks/03_ruasd_train_cnn.ipynb)
 - [Проверка и продолжение сборки TAR на CPU](audio_deepfake_detector/notebooks/04_ruasd_tar_archives_cpu.ipynb)
+- [Восстановление готовых TAR и обучение CNN](audio_deepfake_detector/notebooks/05_ruasd_train_simple.ipynb)
 
 Тема переключается кнопкой «Тема» рядом с кнопкой анализа и сохраняется между
 запусками. Локальные окна «Руководство пользователя» и «О программе» доступны

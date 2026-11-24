@@ -12,6 +12,7 @@ from audio_deepfake_detector.src.colab_cache import MANIFEST_NAME, check_local_c
 from audio_deepfake_detector.src.colab_tar_cache import (
     benchmark_tar_transfer,
     build_tar_archives,
+    list_ready_tar_archives,
     restore_tar_cache,
 )
 
@@ -57,6 +58,7 @@ def test_shards_resume_and_restore_only_missing(roots) -> None:
     assert len(parts) == 4
     assert all(part.stat().st_size <= 20480 for part in parts)
     assert all(part.parent.name != "test_unseen" for part in parts)
+    assert sorted(list_ready_tar_archives(source, archives)) == parts
     original_times = [part.stat().st_mtime_ns for part in parts]
     parts[0].unlink()
     report = build_tar_archives(source, archives, staging, **options)
@@ -67,6 +69,9 @@ def test_shards_resume_and_restore_only_missing(roots) -> None:
     assert first["restored_files"] == 4
     assert not (cache / "test_unseen").exists()
     assert check_local_cache(source, cache, verify_checksums=True).ready
+    assert check_local_cache(
+        source, cache, verify_checksums=True, compare_source_sizes=False,
+    ).ready
     assert (cache / MANIFEST_NAME).read_bytes() == (source / MANIFEST_NAME).read_bytes()
     result = restore_tar_cache(source, archives, cache, reserve_bytes=0)
     assert result["transferred_tar_bytes"] == 0

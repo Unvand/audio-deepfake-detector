@@ -13,6 +13,7 @@ import re
 import time
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
@@ -55,9 +56,11 @@ class MelConfig:
             raise ValueError("FFT, длина окна и hop_length должны быть положительными")
         if self.win_length > self.n_fft:
             raise ValueError("win_length не должен превышать n_fft")
-        if self.n_mels < 2:
-            raise ValueError("n_mels должен быть не меньше двух")
-        if self.f_min < 0 or self.f_max <= self.f_min:
+        if self.n_mels < 16 or (4 * self.sample_rate // self.hop_length + 1) < 16:
+            raise ValueError("Для четырёх слоёв pooling требуется минимум 16 Mel-частот и кадров")
+        if self.n_fft // 2 >= 4 * self.sample_rate:
+            raise ValueError("FFT слишком велик для четырёхсекундного сегмента")
+        if not all(map(isfinite, (self.f_min, self.f_max))) or not 0 <= self.f_min < self.f_max:
             raise ValueError("Требуется 0 <= f_min < f_max")
         if self.f_max > self.sample_rate / 2:
             raise ValueError("f_max не должен превышать частоту Найквиста")
@@ -84,7 +87,10 @@ class TrainingConfig:
         """Проверить настройки до создания loaders и checkpoint."""
         if self.batch_size not in {8, 16, 32, 64}:
             raise ValueError("batch_size должен быть одним из: 8, 16, 32, 64")
-        if self.epochs <= 0 or self.learning_rate <= 0 or self.weight_decay < 0:
+        if (
+            not all(map(isfinite, (self.learning_rate, self.weight_decay)))
+            or self.epochs <= 0 or self.learning_rate <= 0 or self.weight_decay < 0
+        ):
             raise ValueError("epochs/lr должны быть положительными, weight_decay >= 0")
         if self.num_workers < 0 or self.early_stopping_patience <= 0:
             raise ValueError("num_workers >= 0, patience > 0")
@@ -499,7 +505,9 @@ def _compatible_training_config(saved: Mapping[str, Any], current: TrainingConfi
     current_values = asdict(current)
     saved_values = dict(saved)
     current_epochs = int(current_values.pop("epochs"))
-    saved_epochs = int(saved_values.pop("epochs"))
+    saved_epochs = saved_values.pop("epochs", None)
+    if not isinstance(saved_epochs, int):
+        return False
     return current_values == saved_values and current_epochs >= saved_epochs
 
 
@@ -542,6 +550,31 @@ def _save_history(history: list[dict[str, Any]], output_dir: Path) -> None:
     csv_temporary.replace(output_dir / "training_history.csv")
 
 
+def inspect_training_run(
+    output_dir: str | Path,
+    mel_config: MelConfig,
+    training_config: TrainingConfig,
+    *,
+    resume: bool,
+) -> int:
+    """Проверить запуск из notebook 05 и вернуть номер следующей эпохи (с единицы)."""
+    output = Path(output_dir)
+    if not resume:
+        if output.exists() and any(output.iterdir()):
+            raise FileExistsError("Этот run_id уже занят. Включите Resume или укажите новый run_id.")
+        return 1
+
+    last_path = output / "last_checkpoint.pth"
+    if not last_path.is_file():
+        raise FileNotFoundError(
+            f"Checkpoint отсутствует: {last_path}. Для нового запуска укажите свободный "
+            "run_id и выключите Resume training."
+        )
+    checkpoint = torch.load(last_path, map_location="cpu", weights_only=False)
+    assert_checkpoint_compatible(checkpoint, mel_config, training_config)
+    return int(checkpoint["epoch"]) + 2
+
+
 def train_cnn(
     prepared_root: str | Path,
     output_dir: str | Path,
@@ -554,7 +587,7 @@ def train_cnn(
     prepared_root = Path(prepared_root)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    manifest = pd.read_csv(prepared_root / "ruasd_segments_manifest.csv")
+    manifest = pd.read_csv(prepared_root / "ruasd_segments_manifest.csv", low_memory=False)
     if set(manifest["split"].unique()) - {"train", "validation", "test_unseen"}:
         raise ValueError("Manifest содержит неизвестные split")
     mel_config = mel_config or MelConfig()
@@ -586,7 +619,8 @@ def train_cnn(
     epochs_without_improvement = 0
 
     if resume and last_path.exists():
-        checkpoint = torch.load(last_path, map_location=device, weights_only=False)
+        # Состояния CPU RNG должны остаться на CPU и при запуске на CUDA.
+        checkpoint = torch.load(last_path, map_location="cpu", weights_only=False)
         assert_checkpoint_compatible(checkpoint, mel_config, training_config)
         model.load_state_dict(checkpoint["model_state"])
         optimizer.load_state_dict(checkpoint["optimizer_state"])
@@ -718,9 +752,10 @@ def train_cnn(
             )
             tqdm.write(
                 f"Epoch {epoch + 1}/{training_config.epochs}: "
-                f"{duration_seconds:.1f}s, val F1={validation_f1:.4f}, "
+                f"{duration_seconds:.1f}s, train loss={record['train_loss']:.4f}, "
+                f"val loss={record['validation_loss']:.4f}, val F1={validation_f1:.4f}, "
                 f"val EER={validation_result['source']['eer']:.4f}, "
-                f"best={'YES' if improved else 'no'}"
+                f"лучшая эпоха={best_epoch + 1}; checkpoint сохранён"
             )
             if epochs_without_improvement >= training_config.early_stopping_patience:
                 break
@@ -742,7 +777,7 @@ def evaluate_checkpoint(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     mel_config = MelConfig(**checkpoint["mel_config"])
-    manifest = pd.read_csv(Path(prepared_root) / "ruasd_segments_manifest.csv")
+    manifest = pd.read_csv(Path(prepared_root) / "ruasd_segments_manifest.csv", low_memory=False)
     dataset = RuASDSegmentDataset(manifest, prepared_root, split, mel_config)
     loader = DataLoader(
         dataset,

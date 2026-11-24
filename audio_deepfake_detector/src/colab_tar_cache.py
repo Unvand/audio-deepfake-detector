@@ -310,6 +310,13 @@ def _published(source, archive_root, splits):
             yield archive, shard, receipt
 
 
+def list_ready_tar_archives(source_root, archive_root, splits=("train", "validation")):
+    """Проверить план, наличие, размеры и JSON готовых частей без чтения TAR."""
+    source = Path(source_root).resolve()
+    archives = Path(archive_root).resolve()
+    return tuple(archive for archive, _, _ in _published(source, archives, splits))
+
+
 def restore_tar_cache(
     source_root, archive_root, cache_root, splits=("train", "validation"), *,
     reserve_bytes=GIB, progress_callback=None,

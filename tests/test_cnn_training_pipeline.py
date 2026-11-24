@@ -16,6 +16,7 @@ from tensorboard.backend.event_processing.event_accumulator import (
     EventAccumulator,
 )
 
+from audio_deepfake_detector.src import cnn_training
 from audio_deepfake_detector.src.cnn_training import (
     MelConfig,
     RuASDSegmentDataset,
@@ -24,6 +25,7 @@ from audio_deepfake_detector.src.cnn_training import (
     build_loss_functions,
     compute_pos_weight,
     configs_from_mapping,
+    inspect_training_run,
     make_loaders,
     resolve_run_directory,
     train_cnn,
@@ -163,7 +165,28 @@ def test_checkpoint_compatibility_and_run_directory(tmp_path: Path) -> None:
         resolve_run_directory(tmp_path, "../escape")
 
 
-def test_training_checkpoint_resume_tensorboard_and_real_images(tmp_path: Path) -> None:
+def test_resume_preflight_preserves_existing_run(tmp_path: Path) -> None:
+    mel = MelConfig()
+    config = TrainingConfig()
+    path = tmp_path / "last_checkpoint.pth"
+    with pytest.raises(FileNotFoundError, match="выключите Resume"):
+        inspect_training_run(tmp_path, mel, config, resume=True)
+    assert inspect_training_run(tmp_path, mel, config, resume=False) == 1
+    torch.save({
+        "epoch": 1,
+        "training_config": asdict(replace(config, epochs=2)),
+        "mel_config": asdict(mel),
+    }, path)
+    previous = path.read_bytes()
+    assert inspect_training_run(tmp_path, mel, config, resume=True) == 3
+    with pytest.raises(ValueError, match="несовместим"):
+        inspect_training_run(tmp_path, mel, replace(config, batch_size=16), resume=True)
+    with pytest.raises(FileExistsError):
+        inspect_training_run(tmp_path, mel, config, resume=False)
+    assert path.read_bytes() == previous
+
+
+def test_training_checkpoint_resume_tensorboard_and_real_images(tmp_path: Path, monkeypatch) -> None:
     prepared = tmp_path / "content" / "ruasd_prepared_cache"
     manifest = _prepared_dataset(prepared)
     run_dir = tmp_path / "google_drive" / "training_v1" / "runs" / "tiny"
@@ -212,3 +235,17 @@ def test_training_checkpoint_resume_tensorboard_and_real_images(tmp_path: Path) 
     assert set(manifest[manifest["split"] == "test_unseen"]["sample_id"]).isdisjoint(
         set(manifest[manifest["split"] != "test_unseen"]["sample_id"])
     )
+
+    class StopBeforeTraining(Exception):
+        pass
+
+    def check_next_epoch(*_args, **kwargs):
+        assert kwargs["epoch"] == 2
+        assert kwargs["total_epochs"] == 20
+        raise StopBeforeTraining
+
+    saved_bytes = (run_dir / "last_checkpoint.pth").read_bytes()
+    monkeypatch.setattr(cnn_training, "_run_epoch", check_next_epoch)
+    with pytest.raises(StopBeforeTraining):
+        train_cnn(prepared, run_dir, mel, replace(first_config, epochs=20), resume=True)
+    assert (run_dir / "last_checkpoint.pth").read_bytes() == saved_bytes

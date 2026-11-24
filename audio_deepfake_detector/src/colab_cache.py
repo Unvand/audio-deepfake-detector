@@ -84,7 +84,7 @@ def _read_manifest(root: Path) -> pd.DataFrame:
     if not path.is_file() or path.is_symlink():
         raise FileNotFoundError(f"Manifest не найден: {path}")
     try:
-        frame = pd.read_csv(path)
+        frame = pd.read_csv(path, low_memory=False)
     except (OSError, pd.errors.ParserError, pd.errors.EmptyDataError) as error:
         raise ValueError(f"Manifest повреждён: {path}: {error}") from error
     missing = REQUIRED_COLUMNS - set(frame.columns)
@@ -130,6 +130,9 @@ def _load_index(cache_root: Path) -> pd.DataFrame:
     required = {"audio_path", "source_size", "sha256"}
     if not required.issubset(frame.columns) or frame["audio_path"].duplicated().any():
         return pd.DataFrame(columns=["audio_path", "source_size", "sha256"])
+    sizes = pd.to_numeric(frame["source_size"], errors="coerce")
+    frame = frame.loc[sizes.gt(0) & sizes.mod(1).eq(0)].copy()
+    frame["source_size"] = sizes.loc[frame.index]
     return frame
 
 
