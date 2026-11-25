@@ -4,6 +4,28 @@ Notebook 01 готовит FLAC-сегменты на CPU. Notebook 02 чита�
 а notebook 03 добавляет локальный кэш `/content` и диагностику. Оба блокнота
 обучают одну и ту же CNN на GPU. Notebook 04 проверяет и собирает TAR на CPU.
 Notebook 05 использует готовые TAR и запускает обучение той же CNN.
+Notebook 06 оценивает выбранный checkpoint на test_unseen.
+
+## Notebook 06: независимая оценка RuASD
+
+Откройте [notebook 06](../audio_deepfake_detector/notebooks/06_ruasd_evaluate_cnn.ipynb)
+в Colab. Устройство выбирается автоматически. Выполните ячейки 1–2, выберите
+`run_id` и нажмите «Проверить готовность». Для `baseline_cached_v1` блокнот
+проверяет `best_model.pth` восьмой эпохи. Порог берётся из checkpoint,
+параметры подготовки — из `prepared_v1/preprocessing_config.json`.
+
+Оставьте чтение с Drive или включите локальный кэш test_unseen. Установите
+`RUN_EVALUATION = True` в ячейке 3 и запустите её. Проверка использует
+замороженную модель и не подбирает порог. Основные метрики рассчитаны по
+`sample_id`, отдельно от метрик фрагментов. FAR и FRR рассчитаны при
+сохранённом пороге, EER — по ближайшей точке ROC, как в validation.
+
+При включённом сохранении результаты появятся в
+`MyDrive/VKR_RuASD/evaluation_v1/<run_id>/`. Повторный запуск сохраняется
+в отдельном подкаталоге. Для прослушивания и просмотра log-Mel первых
+сегментов ошибочных записей включите `SHOW_ERROR_EXAMPLES` в ячейке 4.
+Скачайте `evaluation_summary.md` для добавления результата в
+[журнал ВКР](VKR_EXPERIMENT_LOG.md).
 
 ## Notebook 05: обучение из готовых TAR
 

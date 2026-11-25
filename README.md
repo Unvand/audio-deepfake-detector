@@ -18,6 +18,8 @@ python main.py
 - [Обучение RuASD из локального кэша Colab](audio_deepfake_detector/notebooks/03_ruasd_train_cnn.ipynb)
 - [Проверка и продолжение сборки TAR на CPU](audio_deepfake_detector/notebooks/04_ruasd_tar_archives_cpu.ipynb)
 - [Восстановление готовых TAR и обучение CNN](audio_deepfake_detector/notebooks/05_ruasd_train_simple.ipynb)
+- [Независимая оценка CNN на test_unseen](audio_deepfake_detector/notebooks/06_ruasd_evaluate_cnn.ipynb)
+- [Журнал экспериментов ВКР](docs/VKR_EXPERIMENT_LOG.md) · [Отчёт Word](docs/VKR_EXPERIMENT_REPORT.docx)
 
 Тема переключается кнопкой «Тема» рядом с кнопкой анализа и сохраняется между
 запусками. Локальные окна «Руководство пользователя» и «О программе» доступны
