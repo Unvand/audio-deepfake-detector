@@ -20,6 +20,7 @@ python main.py
 - [Восстановление готовых TAR и обучение CNN](audio_deepfake_detector/notebooks/05_ruasd_train_simple.ipynb)
 - [Независимая оценка CNN на test_unseen](audio_deepfake_detector/notebooks/06_ruasd_evaluate_cnn.ipynb)
 - [Внешняя оценка CNN на своих REAL/FAKE записях](audio_deepfake_detector/notebooks/07_external_audio_evaluation.ipynb)
+- [Диагностика обобщения CNN](audio_deepfake_detector/notebooks/08_diagnose_cnn_generalization.ipynb)
 - [Журнал экспериментов ВКР](docs/VKR_EXPERIMENT_LOG.md) · [Отчёт Word](docs/VKR_EXPERIMENT_REPORT.docx)
 
 Тема переключается кнопкой «Тема» рядом с кнопкой анализа и сохраняется между

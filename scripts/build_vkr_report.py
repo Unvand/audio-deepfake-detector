@@ -56,8 +56,8 @@ def append_summary(markdown: str, summary: str) -> str:
     if marker in markdown:
         return markdown
     lines = summary.strip().splitlines()
-    if not lines or not lines[0].startswith(("# Независимая оценка ", "# Внешняя оценка ")):
-        raise ValueError("Ожидается evaluation_summary.md из notebook 06 или 07")
+    if not lines or not lines[0].startswith(("# Независимая оценка ", "# Внешняя оценка ", "# Исследование причин снижения качества")):
+        raise ValueError("Ожидается отчёт оценки или диагностики")
     nested = "\n".join("#" + line if line.startswith("#") else line for line in lines)
     return markdown.rstrip() + f"\n\n{marker}\n{nested}\n"
 
