@@ -42,3 +42,7 @@ processing_errors.csv
 ruasd_segments_manifest.csv
 ruasd_prepared_cache/
 
+
+# Приватные выгрузки экспериментов Google Drive
+private_exports/
+vkr_private/

@@ -94,7 +94,7 @@ def main() -> None:
                 "--from=markdown",
                 "--to=docx",
                 "--metadata=lang:ru-RU",
-                f"--resource-path={work}",
+                f"--resource-path={work}:{DOCS}",
                 "--output",
                 str(DOCS / "VKR_EXPERIMENT_REPORT.docx"),
             ],
