@@ -30,3 +30,6 @@ python main.py
 CNN пока не обучена: приложение честно показывает статус
 `МОДЕЛЬ НЕ ЗАГРУЖЕНА` и не генерирует случайные REAL/FAKE-результаты.
 
+- [Аудит данных XLS-R](audio_deepfake_detector/notebooks/09_xlsr_data_audit.ipynb)
+- [Обучение XLS-R](audio_deepfake_detector/notebooks/10_xlsr_train.ipynb)
+- [Оценка XLS-R](audio_deepfake_detector/notebooks/11_xlsr_evaluate.ipynb)

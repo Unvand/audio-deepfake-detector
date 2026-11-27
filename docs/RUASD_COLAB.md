@@ -367,3 +367,15 @@ python scripts/build_vkr_report.py
 по исходным файлам отдельно от сегментов, EER и среднее score по ID записи.
 Внешний тест неудачен: Accuracy=0.25. Его нельзя использовать для подбора порога
 и затем называть независимым финальным тестом.
+
+## Второй эксперимент: XLS-R
+
+[Notebook 09](../audio_deepfake_detector/notebooks/09_xlsr_data_audit.ipynb)
+проверяет RuASD и наличие ASVspoof 5 на Drive без обучения.
+[Notebook 10](../audio_deepfake_detector/notebooks/10_xlsr_train.ipynb)
+содержит ручные переключатели `RUN_SMOKE_TEST` и `RUN_TRAINING`.
+Сначала выберите Frozen Encoder и малый batch; checkpoint хранится в
+`training_xlsr_v1/runs/xlsr_baseline_v1/`. После обучения
+[notebook 11](../audio_deepfake_detector/notebooks/11_xlsr_evaluate.ipynb)
+проводит отдельную оценку test_unseen. Восемь ранее просмотренных внешних
+записей не используйте для выбора архитектуры или порога.
