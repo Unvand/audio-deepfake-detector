@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import random
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -71,6 +72,35 @@ def audit_manifest(path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
         if p.is_absolute() or ".." in p.parts or p.parts[0] != split or p.suffix.lower() != ".flac":
             raise ValueError(f"Недопустимый путь: {name}")
     return frame, frame.groupby(["split", "label"]).agg(segments=("segment_id", "size"), sources=("sample_id", "nunique")).reset_index()
+
+
+def select_pilot_sources(frame: pd.DataFrame, *, train_per_class: int = 500,
+                         validation_per_class: int = 100, seed: int = 42) -> pd.DataFrame:
+    """Выбрать целые записи до достижения числа сегментов каждого класса."""
+    if min(train_per_class, validation_per_class) < 1:
+        raise ValueError("Размер pilot должен быть положительным")
+    if frame.segment_id.duplicated().any() or frame.groupby("sample_id").split.nunique().gt(1).any():
+        raise ValueError("Дубли segment_id или пересечение sample_id")
+    rng = np.random.default_rng(seed)
+    selected = []
+    for split, target in (("train", train_per_class), ("validation", validation_per_class)):
+        for label in ("real", "fake"):
+            group = frame.loc[frame.split.eq(split) & frame.label.str.lower().eq(label)]
+            sizes = group.groupby("sample_id", sort=True).size()
+            if sizes.sum() < target:
+                raise ValueError(f"Недостаточно сегментов {split}/{label}")
+            count = 0
+            ids = []
+            for index in rng.permutation(len(sizes)):
+                ids.append(sizes.index[index])
+                count += int(sizes.iloc[index])
+                if count >= target:
+                    break
+            selected.append(group.loc[group.sample_id.isin(ids)])
+    result = pd.concat(selected, ignore_index=True)
+    if result.split.eq("test_unseen").any() or result.groupby("sample_id").split.nunique().gt(1).any():
+        raise ValueError("Pilot содержит test_unseen или пересечение split")
+    return result
 
 
 class WaveformDataset(Dataset):
@@ -157,6 +187,9 @@ def run_epoch(model, loader, device, threshold, optimizer=None, accumulation=1, 
     if training:
         optimizer.zero_grad(set_to_none=True)
     scores, labels, ids, losses = [], [], [], []
+    started = time.monotonic()
+    if device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats(device)
     for index, (wave, mask, target, names) in enumerate(tqdm(loader, desc="train" if training else "validation")):
         wave, mask, target = wave.to(device), mask.to(device), target.to(device)
         with torch.set_grad_enabled(training):
@@ -166,10 +199,12 @@ def run_epoch(model, loader, device, threshold, optimizer=None, accumulation=1, 
             if not torch.isfinite(loss):
                 raise ValueError("Loss содержит NaN/Inf")
             if training:
+                group_start = (index // accumulation) * accumulation
+                group_size = min(accumulation, len(loader) - group_start)
                 if scaler is not None:
-                    scaler.scale(loss / accumulation).backward()
+                    scaler.scale(loss / group_size).backward()
                 else:
-                    (loss / accumulation).backward()
+                    (loss / group_size).backward()
                 if (index + 1) % accumulation == 0 or index + 1 == len(loader):
                     if scaler is not None:
                         scaler.unscale_(optimizer)
@@ -187,14 +222,16 @@ def run_epoch(model, loader, device, threshold, optimizer=None, accumulation=1, 
     y, s = np.asarray(labels), np.asarray(scores)
     source_y, source_s = aggregate_source_scores(ids, y, s)
     return {"loss": float(np.mean(losses)), "segment": binary_metrics(y, s, threshold),
-            "source": binary_metrics(source_y, source_s, threshold), "scores": s, "labels": y, "sample_ids": ids}
+            "source": binary_metrics(source_y, source_s, threshold), "scores": s, "labels": y, "sample_ids": ids,
+            "n_segments": len(y), "n_sources": len(source_y), "duration_seconds": time.monotonic() - started,
+            "peak_cuda_mib": torch.cuda.max_memory_allocated(device) / 2**20 if device.type == "cuda" else None}
 
 
 def train(root: Path, manifest: pd.DataFrame, output: Path, config: XLSRConfig, *, resume=False, git_commit="UNKNOWN"):
     """Обучить только train; validation выбирает лучшую модель по source F1."""
     config.validate()
     output = Path(output)
-    if output.exists() and not resume:
+    if output.exists() and not resume and any(p.name != "pilot_selection.csv" for p in output.iterdir()):
         raise FileExistsError("Эксперимент уже существует; выберите другой run_id или resume")
     output.mkdir(parents=True, exist_ok=True)
     random.seed(config.seed); np.random.seed(config.seed); torch.manual_seed(config.seed)
@@ -230,13 +267,19 @@ def train(root: Path, manifest: pd.DataFrame, output: Path, config: XLSRConfig, 
         torch.set_rng_state(state["torch_rng"])
         np.random.set_state(state["numpy_rng"])
         random.setstate(state["python_rng"])
+        if device.type == "cuda" and state.get("cuda_rng") is not None:
+            torch.cuda.set_rng_state_all(state["cuda_rng"])
         start, best, stale, history = state["epoch"] + 1, state["best_f1"], state["stale"], state["history"]
     for epoch in range(start, config.epochs):
         train_result = run_epoch(model, loaders["train"], device, config.threshold, optimizer, config.accumulation, pos_weight, scaler)
         valid = run_epoch(model, loaders["validation"], device, config.threshold)
         scheduler.step(valid["source"]["f1"])
         history.append({"epoch": epoch + 1, "train_loss": train_result["loss"], "validation_loss": valid["loss"],
-                        "validation_segment": valid["segment"], "validation_source": valid["source"]})
+                        "validation_segment": valid["segment"], "validation_source": valid["source"],
+                        "train_segments": train_result["n_segments"], "validation_segments": valid["n_segments"],
+                        "train_sources": train_result["n_sources"], "validation_sources": valid["n_sources"],
+                        "epoch_seconds": train_result["duration_seconds"] + valid["duration_seconds"],
+                        "peak_cuda_mib": max(train_result["peak_cuda_mib"] or 0, valid["peak_cuda_mib"] or 0)})
         improved = valid["source"]["f1"] > best
         if improved:
             best, stale = valid["source"]["f1"], 0
@@ -246,6 +289,7 @@ def train(root: Path, manifest: pd.DataFrame, output: Path, config: XLSRConfig, 
                  "scaler": scaler.state_dict() if scaler is not None else None,
                  "config": asdict(config), "epoch": epoch, "best_f1": best, "stale": stale, "history": history,
                  "torch_rng": torch.get_rng_state(), "numpy_rng": np.random.get_state(), "python_rng": random.getstate(),
+                 "cuda_rng": torch.cuda.get_rng_state_all() if device.type == "cuda" else None,
                  "git_commit": git_commit, "torch_version": torch.__version__}
         torch.save(state, output / "last_checkpoint.pth.tmp")
         (output / "last_checkpoint.pth.tmp").replace(last)
@@ -256,7 +300,12 @@ def train(root: Path, manifest: pd.DataFrame, output: Path, config: XLSRConfig, 
         (output / "training_history.json").write_text(json.dumps(history, indent=2))
         pd.DataFrame(history).to_csv(output / "training_history.csv", index=False)
         (output / "experiment_config.json").write_text(json.dumps(asdict(config), indent=2))
-        print(f"Epoch {epoch+1}: loss={train_result['loss']:.4f}, validation F1={valid['source']['f1']:.4f}, EER={valid['source']['eer']:.4f}")
+        print(f"Epoch {epoch+1}: train loss={train_result['loss']:.4f}, validation loss={valid['loss']:.4f}, "
+              f"Acc={valid['source']['accuracy']:.4f}, P={valid['source']['precision']:.4f}, "
+              f"R={valid['source']['recall']:.4f}, F1={valid['source']['f1']:.4f}, "
+              f"EER={valid['source']['eer']:.4f}, segments={valid['n_segments']}, "
+              f"sources={valid['n_sources']}, seconds={history[-1]['epoch_seconds']:.1f}, "
+              f"GPU MiB={history[-1]['peak_cuda_mib']:.1f}")
         if stale >= config.patience:
             break
     return history

@@ -15,6 +15,7 @@ from audio_deepfake_detector.src.xlsr_training import (
     XLSRDetector,
     audit_manifest,
     masked_mean,
+    select_pilot_sources,
 )
 
 
@@ -61,3 +62,20 @@ def test_manifest_and_waveform(tmp_path):
     pd.DataFrame(rows).to_csv(path, index=False)
     with pytest.raises(ValueError, match="Утечка"):
         audit_manifest(path)
+
+
+def test_pilot_selects_whole_sources_and_never_test():
+    rows = []
+    for split in ("train", "validation", "test_unseen"):
+        for label in ("real", "fake"):
+            for source in range(5):
+                for segment in range(3):
+                    rows.append({"sample_id": f"{split}-{label}-{source}",
+                                 "segment_id": f"{split}-{label}-{source}-{segment}",
+                                 "split": split, "label": label})
+    frame = pd.DataFrame(rows)
+    selected = select_pilot_sources(frame, train_per_class=5, validation_per_class=4)
+    assert not selected.split.eq("test_unseen").any()
+    assert selected.groupby("sample_id").size().eq(3).all()
+    assert selected.groupby(["split", "label"]).size().ge(4).all()
+    assert selected.segment_id.tolist() == select_pilot_sources(frame, train_per_class=5, validation_per_class=4).segment_id.tolist()

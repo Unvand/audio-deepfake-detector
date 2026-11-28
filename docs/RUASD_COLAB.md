@@ -379,3 +379,20 @@ python scripts/build_vkr_report.py
 [notebook 11](../audio_deepfake_detector/notebooks/11_xlsr_evaluate.ipynb)
 проводит отдельную оценку test_unseen. Восемь ранее просмотренных внешних
 записей не используйте для выбора архитектуры или порога.
+
+### XLS-R: GPU smoke-test и пробный запуск
+
+В [notebook 10](../audio_deepfake_detector/notebooks/10_xlsr_train.ipynb)
+ячейка `RUN_SMOKE_TEST` теперь переносит модель, аудио, mask и метку на CUDA,
+если она доступна. Она проверяет обновление головы и неизменность энкодера,
+печатает название GPU и пик памяти, затем освобождает временную модель.
+По сообщению пользователя, ручной GPU smoke-test на Tesla T4 прошёл с loss
+0.6932960748672485 и пиком 1307.1 МиБ; локально на реальной T4 этот результат
+не воспроизводился.
+
+Следующая отдельная ячейка `RUN_PILOT_TRAINING` выбирает целые `sample_id`
+с фиксированным seed: около 500 сегментов каждого класса train и 100 каждого
+класса validation. Фактический состав выводится и сохраняется в
+`training_xlsr_v1/runs/xlsr_pilot_v1/pilot_selection.csv`. Три эпохи Frozen
+Encoder выполняются только после ручного переключения на `True`. Основной
+`xlsr_baseline_v1` остаётся отдельным запуском; `test_unseen` в pilot не входит.
