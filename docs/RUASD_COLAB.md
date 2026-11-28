@@ -396,3 +396,30 @@ python scripts/build_vkr_report.py
 `training_xlsr_v1/runs/xlsr_pilot_v1/pilot_selection.csv`. Три эпохи Frozen
 Encoder выполняются только после ручного переключения на `True`. Основной
 `xlsr_baseline_v1` остаётся отдельным запуском; `test_unseen` в pilot не входит.
+
+### Полное Frozen Encoder Training с кэшем признаков
+
+В [notebook 10](../audio_deepfake_detector/notebooks/10_xlsr_train.ipynb) после
+предыдущих ячеек выполните ячейку **7**. При желании установите
+`RUN_RESTORE_LOCAL_AUDIO=True`, чтобы восстановить train/validation FLAC из
+готовых TAR в `/content/ruasd_prepared_cache`. Без локального кэша извлечение
+читает FLAC с Drive и может быть заметно медленнее.
+
+В ячейке **8** установите `RUN_BUILD_FEATURE_CACHE=True`. Она синхронно извлечёт
+признаки XLS-R один раз, будет собирать шарды в `/content/xlsr_feature_work`
+и переносить проверенные `.npz` на Drive в
+`training_xlsr_v1/feature_cache/xlsr_baseline_v1/`. После отключения повторите
+ячейки 1–2, 7–8: готовые шарды сверяются по SHA-256 и пропускаются.
+
+В ячейке **9** установите `RUN_VERIFY_FEATURE_CACHE=True`. Она требует полный
+состав 26 350 train и 6518 validation сегментов, сверяет идентификаторы,
+метки и хеши, затем сравнивает logits прямого и кэшированного пути на четырёх
+фиксированных сегментах. Если проверка не пройдена, обучение блокируется.
+
+В ячейке **10** установите `RUN_CACHED_TRAINING=True`. Начальный запуск требует
+`RESUME_CACHED_TRAINING=False`; после отключения выберите `True` и тот же
+каталог. Только голова обучается 15 эпох с patience=5. Лучший checkpoint по
+F1 исходных записей сохраняет **полный** `model.state_dict`, поэтому
+[notebook 11](../audio_deepfake_detector/notebooks/11_xlsr_evaluate.ipynb) может
+выполнить инференс нового WAV через XLS-R без кэша. Ячейка **11** строит графики
+loss, F1 и EER из сохранённой истории. `test_unseen` в кэш обучения не входит.
